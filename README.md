@@ -1,0 +1,2 @@
+# defect-record
+cosmetic defect
