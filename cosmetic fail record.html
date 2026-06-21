@@ -1,0 +1,2045 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>不良记录管理</title>
+    <!-- html5-qrcode 扫码库 -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js">
+    </script>
+    <!-- SheetJS 用于导出 Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js">
+    </script>
+    <!-- QRCode.js 用于生成二维码 -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js">
+    </script>
+    <style>
+        /* ========== CSS 重置 & 全局 ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-light: #dbeafe;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --gray-50: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e1;
+            --gray-400: #94a3b8;
+            --gray-500: #64748b;
+            --gray-600: #475569;
+            --gray-700: #334155;
+            --gray-800: #1e293b;
+            --gray-900: #0f172a;
+            --radius: 12px;
+            --shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --tab-height: 60px;
+            --header-height: 56px;
+        }
+        html,
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--gray-100);
+            color: var(--gray-800);
+            font-size: 16px;
+            line-height: 1.5;
+            height: 100%;
+            overflow: hidden;
+            user-select: none;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--gray-300);
+            border-radius: 4px;
+        }
+
+        /* ========== 应用容器 ========== */
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-width: 480px;
+            margin: 0 auto;
+            background: var(--gray-50);
+            position: relative;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+
+        /* ========== 顶部标题栏 ========== */
+        .app-header {
+            flex-shrink: 0;
+            height: var(--header-height);
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 18px;
+            color: #fff;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+        }
+        .app-header .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 18px;
+            letter-spacing: 0.5px;
+        }
+        .app-header .logo svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+        .app-header .header-date {
+            font-size: 13px;
+            opacity: 0.9;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        /* ========== 内容区域 ========== */
+        .app-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 16px 16px 20px;
+            padding-bottom: calc(20px + var(--safe-bottom));
+            -webkit-overflow-scrolling: touch;
+        }
+        .page {
+            display: none;
+            animation: fadeUp 0.25s ease;
+        }
+        .page.active {
+            display: block;
+        }
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ========== 底部 Tab 导航 ========== */
+        .app-tabbar {
+            flex-shrink: 0;
+            height: calc(var(--tab-height) + var(--safe-bottom));
+            padding-bottom: var(--safe-bottom);
+            background: #fff;
+            border-top: 1px solid var(--gray-200);
+            display: flex;
+            align-items: stretch;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04);
+            z-index: 10;
+        }
+        .tab-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            font-size: 10px;
+            color: var(--gray-400);
+            transition: color 0.2s;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            padding: 6px 0;
+            position: relative;
+        }
+        .tab-item .tab-icon {
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+        .tab-item .tab-icon svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+        }
+        .tab-item .tab-label {
+            font-weight: 500;
+            font-size: 10px;
+        }
+        .tab-item.active {
+            color: var(--primary);
+        }
+        .tab-item.active .tab-icon {
+            transform: scale(1.05);
+        }
+        .tab-item .badge {
+            position: absolute;
+            top: 4px;
+            right: 50%;
+            transform: translateX(calc(50% + 18px));
+            background: var(--danger);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 600;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 5px;
+            line-height: 1;
+        }
+
+        /* ========== 卡片 ========== */
+        .card {
+            background: #fff;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 18px 16px;
+            margin-bottom: 16px;
+            transition: box-shadow 0.2s;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title .sub {
+            font-weight: 400;
+            font-size: 13px;
+            color: var(--gray-400);
+            margin-left: auto;
+        }
+
+        /* ========== 表单 ========== */
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--gray-700);
+            margin-bottom: 5px;
+        }
+        .form-label .required {
+            color: var(--danger);
+            margin-left: 2px;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid var(--gray-200);
+            border-radius: 8px;
+            font-size: 15px;
+            color: var(--gray-800);
+            background: #fff;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+        .form-control::placeholder {
+            color: var(--gray-400);
+            font-size: 14px;
+        }
+        select.form-control {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+        .form-row {
+            display: flex;
+            gap: 12px;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        /* 下拉行 */
+        .select-row {
+            display: flex;
+            gap: 12px;
+        }
+        .select-row .form-group {
+            flex: 1;
+        }
+
+        /* SN 输入行 */
+        .sn-input-row {
+            display: flex;
+            gap: 10px;
+        }
+        .sn-input-row .form-control {
+            flex: 1;
+        }
+        .btn-scan {
+            flex-shrink: 0;
+            padding: 0 16px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .btn-scan:active {
+            transform: scale(0.94);
+            background: var(--primary-dark);
+        }
+        .btn-scan svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        /* 图片上传 */
+        .image-upload-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .image-upload-area .preview-img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1.5px solid var(--gray-200);
+            background: var(--gray-100);
+        }
+        .image-upload-area .btn-upload {
+            padding: 8px 16px;
+            background: var(--gray-100);
+            border: 1.5px dashed var(--gray-300);
+            border-radius: 8px;
+            color: var(--gray-600);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .image-upload-area .btn-upload:active {
+            background: var(--gray-200);
+        }
+        .image-upload-area .btn-remove-image {
+            color: var(--danger);
+            background: none;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        /* 提交按钮 */
+        .btn-submit {
+            width: 100%;
+            padding: 13px 0;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+            letter-spacing: 0.5px;
+        }
+        .btn-submit:active {
+            transform: scale(0.97);
+            background: var(--primary-dark);
+        }
+        .btn-submit:disabled {
+            opacity: 0.6;
+            transform: none;
+            pointer-events: none;
+        }
+
+        /* Toast 提示 */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-80px);
+            background: var(--gray-900);
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 999;
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+            max-width: 90%;
+            pointer-events: none;
+            box-shadow: var(--shadow-lg);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success {
+            background: var(--success);
+        }
+        .toast.error {
+            background: var(--danger);
+        }
+
+        /* ========== 记录列表 ========== */
+        .record-item {
+            padding: 14px 0;
+            border-bottom: 1px solid var(--gray-100);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            transition: background 0.15s;
+        }
+        .record-item:last-child {
+            border-bottom: none;
+        }
+        .record-item .r-icon {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary-light);
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        .record-item .r-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .record-item .r-sn {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--gray-800);
+        }
+        .record-item .r-defect {
+            font-size: 14px;
+            color: var(--gray-600);
+            margin-top: 1px;
+        }
+        .record-item .r-meta {
+            font-size: 12px;
+            color: var(--gray-400);
+            margin-top: 4px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 14px;
+        }
+        .record-item .r-meta .tag {
+            background: var(--gray-100);
+            padding: 0 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: var(--gray-500);
+        }
+        .record-item .r-thumb {
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: var(--gray-100);
+            border: 1px solid var(--gray-200);
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+        .record-item .r-thumb:active {
+            transform: scale(0.92);
+        }
+        .record-item .r-delete {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: var(--gray-400);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            margin-top: -2px;
+        }
+        .record-item .r-delete:active {
+            background: var(--gray-100);
+            color: var(--danger);
+            transform: scale(0.9);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--gray-400);
+        }
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            fill: var(--gray-300);
+            margin-bottom: 16px;
+        }
+        .empty-state p {
+            font-size: 15px;
+        }
+
+        /* 日期分组标题 */
+        .date-group-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--gray-500);
+            padding: 12px 0 6px;
+            border-bottom: 2px solid var(--gray-200);
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .date-group-title .count {
+            font-weight: 400;
+            color: var(--gray-400);
+            font-size: 12px;
+        }
+
+        /* ========== 统计页面 ========== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .stats-card {
+            background: #fff;
+            border-radius: var(--radius);
+            padding: 16px 14px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        .stats-card .num {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--gray-800);
+            line-height: 1.2;
+        }
+        .stats-card .label {
+            font-size: 13px;
+            color: var(--gray-500);
+            margin-top: 4px;
+        }
+        .stats-card.primary .num {
+            color: var(--primary);
+        }
+        .stats-card.success .num {
+            color: var(--success);
+        }
+        .stats-card.danger .num {
+            color: var(--danger);
+        }
+        .stats-card.warning .num {
+            color: var(--warning);
+        }
+
+        .stats-chart-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin: 16px 0 10px;
+        }
+        .stats-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .stats-bar .bar-label {
+            font-size: 13px;
+            color: var(--gray-600);
+            width: 70px;
+            flex-shrink: 0;
+            text-align: right;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .stats-bar .bar-track {
+            flex: 1;
+            height: 20px;
+            background: var(--gray-200);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        .stats-bar .bar-fill {
+            height: 100%;
+            border-radius: 10px;
+            background: var(--primary);
+            transition: width 0.6s ease;
+            min-width: 4px;
+        }
+        .stats-bar .bar-count {
+            font-size: 13px;
+            color: var(--gray-500);
+            width: 30px;
+            flex-shrink: 0;
+            font-weight: 500;
+        }
+
+        .btn-export {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 18px;
+            background: var(--gray-200);
+            color: var(--gray-700);
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 8px;
+        }
+        .btn-export:active {
+            background: var(--gray-300);
+        }
+        .btn-export.primary {
+            background: var(--primary);
+            color: #fff;
+        }
+        .btn-export.primary:active {
+            background: var(--primary-dark);
+        }
+
+        /* ========== 分享海报 ========== */
+        .poster-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #fff;
+            border-radius: var(--radius);
+            padding: 24px 20px 30px;
+            box-shadow: var(--shadow-lg);
+            margin: 0 auto;
+            max-width: 340px;
+        }
+        .poster-container .poster-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--gray-800);
+            margin-bottom: 4px;
+        }
+        .poster-container .poster-sub {
+            font-size: 13px;
+            color: var(--gray-500);
+            margin-bottom: 16px;
+        }
+        .poster-container #qrcode {
+            background: #fff;
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            margin-bottom: 12px;
+        }
+        .poster-container .poster-hint {
+            font-size: 13px;
+            color: var(--gray-400);
+            margin-top: 8px;
+        }
+        .poster-container .poster-footer {
+            margin-top: 16px;
+            font-size: 12px;
+            color: var(--gray-400);
+            border-top: 1px solid var(--gray-200);
+            padding-top: 16px;
+            width: 100%;
+            text-align: center;
+        }
+        .share-input-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .share-input-area .form-control {
+            flex: 1;
+            min-width: 160px;
+        }
+        .share-input-area .btn-generate {
+            padding: 10px 20px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .share-input-area .btn-generate:active {
+            background: var(--primary-dark);
+        }
+
+        /* ========== 图片预览模态框 ========== */
+        .image-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            padding: 20px;
+        }
+        .image-modal.show {
+            display: flex;
+        }
+        .image-modal img {
+            max-width: 100%;
+            max-height: 90%;
+            border-radius: 12px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+            object-fit: contain;
+            background: #000;
+        }
+        .image-modal .close-modal {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            color: #fff;
+            font-size: 32px;
+            background: rgba(0, 0, 0, 0.4);
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background 0.2s;
+        }
+        .image-modal .close-modal:active {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* ========== 扫码覆盖层 ========== */
+        .scanner-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 999;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        .scanner-overlay.show {
+            display: flex;
+        }
+        .scanner-overlay .scanner-box {
+            width: 80%;
+            max-width: 340px;
+            aspect-ratio: 1;
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+            background: #000;
+        }
+        .scanner-overlay .scanner-box video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .scanner-overlay .scanner-hint {
+            color: #fff;
+            font-size: 15px;
+            margin-top: 20px;
+            opacity: 0.8;
+        }
+        .scanner-overlay .btn-close-scanner {
+            margin-top: 24px;
+            padding: 12px 40px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        .scanner-overlay .btn-close-scanner:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* ========== 响应式微调 ========== */
+        @media (max-width: 400px) {
+            .app-header .logo {
+                font-size: 16px;
+            }
+            .app-header .header-date {
+                font-size: 11px;
+                padding: 3px 10px;
+            }
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+            .select-row {
+                flex-direction: column;
+                gap: 0;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+            .stats-card .num {
+                font-size: 22px;
+            }
+            .card {
+                padding: 14px 12px;
+            }
+            .poster-container {
+                padding: 16px;
+            }
+            .share-input-area {
+                flex-direction: column;
+            }
+        }
+        @media (min-width: 481px) {
+            #app {
+                border-radius: 20px;
+                margin-top: 20px;
+                margin-bottom: 20px;
+                max-height: calc(100vh - 40px);
+                box-shadow: var(--shadow-lg);
+            }
+            body {
+                background: var(--gray-200);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+            }
+        }
+        /* 暗色模式适配 */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --gray-50: #0f172a;
+                --gray-100: #1e293b;
+                --gray-200: #334155;
+                --gray-300: #475569;
+                --gray-400: #94a3b8;
+                --gray-500: #94a3b8;
+                --gray-600: #cbd5e1;
+                --gray-700: #e2e8f0;
+                --gray-800: #f1f5f9;
+                --gray-900: #f8fafc;
+            }
+            #app {
+                background: #0f172a;
+            }
+            .card,
+            .stats-card,
+            .poster-container {
+                background: #1e293b;
+            }
+            .app-tabbar {
+                background: #1e293b;
+                border-top-color: #334155;
+            }
+            .form-control,
+            .line-display {
+                background: #0f172a;
+                border-color: #334155;
+                color: #f1f5f9;
+            }
+            .form-control:focus {
+                border-color: var(--primary);
+            }
+            .record-item {
+                border-bottom-color: #334155;
+            }
+            .record-item .r-meta .tag {
+                background: #334155;
+                color: #94a3b8;
+            }
+            .date-group-title {
+                border-bottom-color: #334155;
+                color: #94a3b8;
+            }
+            .stats-bar .bar-track {
+                background: #334155;
+            }
+            .btn-export {
+                background: #334155;
+                color: #e2e8f0;
+            }
+            .btn-export.primary {
+                background: var(--primary);
+                color: #fff;
+            }
+            select.form-control {
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            }
+            .record-item .r-icon {
+                background: rgba(37, 99, 235, 0.25);
+            }
+            .empty-state svg {
+                fill: #334155;
+            }
+            .toast {
+                background: #1e293b;
+                color: #f1f5f9;
+            }
+            .image-upload-area .btn-upload {
+                background: #1e293b;
+                border-color: #475569;
+                color: #94a3b8;
+            }
+            .image-upload-area .preview-img {
+                border-color: #475569;
+            }
+            .poster-container #qrcode {
+                background: #fff;
+            }
+            .poster-container .poster-footer {
+                border-top-color: #334155;
+            }
+            .share-input-area .btn-generate {
+                background: var(--primary);
+                color: #fff;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== Toast ===== -->
+    <div id="toast" class="toast"></div>
+
+    <!-- ===== 扫码覆盖层 ===== -->
+    <div id="scannerOverlay" class="scanner-overlay">
+        <div class="scanner-box" id="scannerBox"></div>
+        <div class="scanner-hint">将 SN 条码放入框内扫描</div>
+        <button class="btn-close-scanner" id="btnCloseScanner">取消扫码</button>
+    </div>
+
+    <!-- ===== 图片预览模态框 ===== -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal(event)">
+        <button class="close-modal" onclick="closeImageModal()">✕</button>
+        <img id="modalImage" src="" alt="预览">
+    </div>
+
+    <!-- ===== 应用 ===== -->
+    <div id="app">
+
+        <!-- 头部 -->
+        <header class="app-header">
+            <div class="logo">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                不良记录
+            </div>
+            <div class="header-date" id="headerDate"></div>
+        </header>
+
+        <!-- 内容 -->
+        <div class="app-content" id="appContent">
+
+            <!-- ===== 页面：录入 ===== -->
+            <div class="page active" id="pageEntry">
+                <div class="card">
+                    <div class="card-title">📋 录入不良</div>
+
+                    <!-- 日期 -->
+                    <div class="form-group">
+                        <label class="form-label">日期 <span class="required">*</span></label>
+                        <input type="date" class="form-control" id="inputDate">
+                    </div>
+
+                    <!-- 投入数（自动填充） -->
+                    <div class="form-group">
+                        <label class="form-label">当天投入数 <span class="required">*</span></label>
+                        <input type="number" class="form-control" id="inputCount" placeholder="自动沿用当日投入数" min="0" step="1">
+                    </div>
+
+                    <!-- 客户别 & 线别 下拉 -->
+                    <div class="select-row">
+                        <div class="form-group">
+                            <label class="form-label">客户别 <span class="required">*</span></label>
+                            <select class="form-control" id="customerSelect">
+                                <option value="惠普">惠普</option>
+                                <option value="联想">联想</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">线别 <span class="required">*</span></label>
+                            <select class="form-control" id="lineSelect">
+                                <option value="惠普A线">惠普A线</option>
+                                <option value="联想B线">联想B线</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- SN -->
+                    <div class="form-group">
+                        <label class="form-label">SN <span class="required">*</span></label>
+                        <div class="sn-input-row">
+                            <input type="text" class="form-control" id="inputSn" placeholder="输入或扫码获取 SN" autocomplete="off">
+                            <button class="btn-scan" id="btnScan">
+                                <svg viewBox="0 0 24 24"><path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h6v6h-6v-6z"/></svg>
+                                扫码
+                            </button>
+                        </div>
+                        <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">💡 以 YL 开头自动选联想，以 4CE 开头自动选惠普</div>
+                    </div>
+
+                    <!-- 不良现象 -->
+                    <div class="form-group">
+                        <label class="form-label">不良现象 <span class="required">*</span></label>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+                            <input type="text" class="form-control" id="inputDefect" placeholder="输入不良现象" style="flex:1;min-width:140px;" list="defectHistoryList">
+                            <datalist id="defectHistoryList"></datalist>
+                            <button class="btn-scan" id="btnQuickDefect" style="padding:0 14px;background:var(--gray-200);color:var(--gray-700);font-size:13px;flex-shrink:0;">历史</button>
+                        </div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;" id="defectQuickTags"></div>
+                    </div>
+
+                    <!-- 图片上传 -->
+                    <div class="form-group">
+                        <label class="form-label">图片（可选）</label>
+                        <div class="image-upload-area">
+                            <img id="imagePreview" class="preview-img" style="display:none;" alt="预览">
+                            <input type="file" id="imageInput" accept="image/*" capture="environment" style="display:none;">
+                            <button class="btn-upload" id="btnUploadImage">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5-5 5-4-4-3 3"/></svg>
+                                拍照 / 上传
+                            </button>
+                            <button class="btn-remove-image" id="btnRemoveImage" style="display:none;">✕ 移除</button>
+                        </div>
+                    </div>
+
+                    <!-- 提交 -->
+                    <button class="btn-submit" id="btnSubmit">✅ 提交记录</button>
+                </div>
+
+                <!-- 今日统计小卡片 -->
+                <div class="card" style="padding:12px 16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--gray-500);">
+                        <span>📊 今日已录 <strong id="todayCount" style="color:var(--primary);">0</strong> 条不良</span>
+                        <span>投入 <strong id="todayInput" style="color:var(--gray-700);">0</strong> 台</span>
+                        <span>不良率 <strong id="todayRate" style="color:var(--danger);">0.0%</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 页面：记录 ===== -->
+            <div class="page" id="pageRecords">
+                <div class="card" style="padding:12px 16px;">
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                        <label style="font-size:14px;font-weight:500;color:var(--gray-600);flex-shrink:0;">📅 筛选</label>
+                        <input type="date" class="form-control" id="filterDate" style="flex:1;padding:8px 12px;font-size:14px;min-width:120px;">
+                        <button class="btn-scan" id="btnClearFilter" style="padding:0 14px;background:var(--gray-200);color:var(--gray-600);font-size:13px;flex-shrink:0;">清除</button>
+                        <button class="btn-export primary" id="btnExportRecordsExcel" style="margin-top:0;padding:8px 14px;font-size:13px;">📤 导出Excel</button>
+                    </div>
+                </div>
+                <div id="recordList">
+                    <!-- 动态渲染 -->
+                </div>
+            </div>
+
+            <!-- ===== 页面：统计 ===== -->
+            <div class="page" id="pageStats">
+                <div class="stats-grid" id="statsOverview">
+                    <div class="stats-card primary"><div class="num" id="statTotal">0</div><div class="label">总不良数</div></div>
+                    <div class="stats-card success"><div class="num" id="statTotalInput">0</div><div class="label">总投入数</div></div>
+                    <div class="stats-card danger"><div class="num" id="statRate">0%</div><div class="label">总不良率</div></div>
+                    <div class="stats-card warning"><div class="num" id="statDays">0</div><div class="label">工作天数</div></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🏷️ 按客户统计</div>
+                    <div id="statsByCustomer"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">📌 不良现象 TOP</div>
+                    <div id="statsByDefect"></div>
+                </div>
+
+                <div style="text-align:center;margin-top:8px;">
+                    <button class="btn-export" id="btnExportExcel">📤 导出 Excel（全部）</button>
+                </div>
+            </div>
+
+            <!-- ===== 页面：分享 ===== -->
+            <div class="page" id="pageShare">
+                <div class="card">
+                    <div class="card-title">📱 生成分享二维码海报</div>
+                    <p style="font-size:14px;color:var(--gray-500);margin-bottom:16px;">输入部署后的网址，生成二维码海报，可截图分享到微信。</p>
+                    <div class="share-input-area">
+                        <input type="url" class="form-control" id="shareUrlInput" placeholder="https://你的域名/不良记录.html" value="">
+                        <button class="btn-generate" id="btnGeneratePoster">生成海报</button>
+                    </div>
+                    <div id="posterArea" style="display:none;">
+                        <div class="poster-container" id="posterContainer">
+                            <div class="poster-title">📋 不良记录管理</div>
+                            <div class="poster-sub">扫码即可使用</div>
+                            <div id="qrcode"></div>
+                            <div class="poster-hint">长按或截图保存二维码</div>
+                            <div class="poster-footer" id="posterFooter">生成日期: --</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:16px;font-size:13px;color:var(--gray-400);">
+                        💡 请先部署此页面到公网服务器，再将网址填入上方输入框。
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ===== 底部 Tab ===== -->
+        <div class="app-tabbar">
+            <button class="tab-item active" data-tab="entry">
+                <span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></span>
+                <span class="tab-label">录入</span>
+            </button>
+            <button class="tab-item" data-tab="records">
+                <span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg></span>
+                <span class="tab-label">记录</span>
+                <span class="badge" id="recordBadge" style="display:none;">0</span>
+            </button>
+            <button class="tab-item" data-tab="stats">
+                <span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg></span>
+                <span class="tab-label">统计</span>
+            </button>
+            <button class="tab-item" data-tab="share">
+                <span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg></span>
+                <span class="tab-label">分享</span>
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // ========================================================================
+        //  JavaScript 逻辑
+        // ========================================================================
+
+        (function() {
+            'use strict';
+
+            // ---------- 数据 ----------
+            const STORAGE_KEY = 'defect_records_data_v2';
+            let records = [];
+            let currentCustomer = '惠普';
+            let currentLine = '惠普A线';
+            let scannerInstance = null;
+            let isScanning = false;
+            let currentImageData = null; // base64
+
+            // 预设不良现象（已修正“似板”为“面板”）
+            const PRESET_DEFECTS = [
+                '面板碰伤', '撞机异响（螺丝）', '机箱有锈斑', '机箱异响',
+                '托架有划痕', '机箱碰伤', '面板安装不良', '面板碰伤未装',
+                '撞机异响', '螺丝松动', '外观刮伤', '标签脱落'
+            ];
+
+            // ---------- DOM 引用 ----------
+            const $ = id => document.getElementById(id);
+            const $$ = sel => document.querySelectorAll(sel);
+
+            const inputDate = $('inputDate');
+            const inputCount = $('inputCount');
+            const customerSelect = $('customerSelect');
+            const lineSelect = $('lineSelect');
+            const inputSn = $('inputSn');
+            const inputDefect = $('inputDefect');
+            const defectHistoryList = $('defectHistoryList');
+            const defectQuickTags = $('defectQuickTags');
+            const btnSubmit = $('btnSubmit');
+            const btnScan = $('btnScan');
+            const btnQuickDefect = $('btnQuickDefect');
+            const scannerOverlay = $('scannerOverlay');
+            const scannerBox = $('scannerBox');
+            const btnCloseScanner = $('btnCloseScanner');
+            const recordList = $('recordList');
+            const filterDate = $('filterDate');
+            const btnClearFilter = $('btnClearFilter');
+            const recordBadge = $('recordBadge');
+            const todayCount = $('todayCount');
+            const todayInput = $('todayInput');
+            const todayRate = $('todayRate');
+            const statTotal = $('statTotal');
+            const statTotalInput = $('statTotalInput');
+            const statRate = $('statRate');
+            const statDays = $('statDays');
+            const statsByCustomer = $('statsByCustomer');
+            const statsByDefect = $('statsByDefect');
+            const btnExportExcel = $('btnExportExcel');
+            const btnExportRecordsExcel = $('btnExportRecordsExcel');
+            const toast = $('toast');
+            const imageInput = $('imageInput');
+            const imagePreview = $('imagePreview');
+            const btnUploadImage = $('btnUploadImage');
+            const btnRemoveImage = $('btnRemoveImage');
+            const imageModal = $('imageModal');
+            const modalImage = $('modalImage');
+            const shareUrlInput = $('shareUrlInput');
+            const btnGeneratePoster = $('btnGeneratePoster');
+            const posterArea = $('posterArea');
+            const qrcodeContainer = $('qrcode');
+            const posterFooter = $('posterFooter');
+
+            let toastTimer = null;
+
+            // ---------- Toast ----------
+            function showToast(msg, type = 'info', duration = 2000) {
+                if (toastTimer) { clearTimeout(toastTimer);
+                    toastTimer = null; }
+                toast.textContent = msg;
+                toast.className = 'toast';
+                if (type === 'success') toast.classList.add('success');
+                if (type === 'error') toast.classList.add('error');
+                void toast.offsetWidth;
+                toast.classList.add('show');
+                toastTimer = setTimeout(() => {
+                    toast.classList.remove('show');
+                    toastTimer = null;
+                }, duration);
+            }
+
+            // ---------- 数据读写 ----------
+            function loadData() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (raw) {
+                        records = JSON.parse(raw);
+                        if (!Array.isArray(records)) records = [];
+                    } else {
+                        records = [];
+                    }
+                } catch (e) {
+                    records = [];
+                }
+                records = records.filter(r => r && typeof r === 'object');
+                // 数据迁移：将“似板”替换为“面板”
+                let migrated = false;
+                records.forEach(r => {
+                    if (r.defect && r.defect.includes('似板')) {
+                        r.defect = r.defect.replace(/似板/g, '面板');
+                        migrated = true;
+                    }
+                    if (!r.id) r.id = Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                    if (!r.date) r.date = new Date().toISOString().slice(0, 10);
+                });
+                if (migrated) saveData();
+                records.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            }
+
+            function saveData() {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+                } catch (e) {
+                    showToast('数据保存失败，请检查存储空间', 'error');
+                }
+            }
+
+            // ---------- 工具 ----------
+            function formatDate(d) {
+                if (!d) return '-';
+                const parts = d.split('-');
+                return parts[0] + '.' + parts[1] + '.' + parts[2];
+            }
+
+            function getToday() {
+                return new Date().toISOString().slice(0, 10);
+            }
+
+            function generateId() {
+                return Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+            }
+
+            // 获取所有不良现象历史（去重，按频率排序）
+            function getDefectHistory() {
+                const map = new Map();
+                records.forEach(r => {
+                    if (r.defect && r.defect.trim()) {
+                        const d = r.defect.trim();
+                        map.set(d, (map.get(d) || 0) + 1);
+                    }
+                });
+                PRESET_DEFECTS.forEach(d => {
+                    if (!map.has(d)) map.set(d, 0);
+                });
+                return Array.from(map.entries())
+                    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+                    .map(e => e[0]);
+            }
+
+            // 获取某天的投入数（取第一条记录的投入数）
+            function getDayInput(date) {
+                const dayRecords = records.filter(r => r.date === date);
+                if (dayRecords.length === 0) return null;
+                for (const r of dayRecords) {
+                    if (r.inputCount !== undefined && r.inputCount !== null && r.inputCount !== '') {
+                        return Number(r.inputCount);
+                    }
+                }
+                return null;
+            }
+
+            // 获取某天的不良数
+            function getDayDefectCount(date) {
+                return records.filter(r => r.date === date).length;
+            }
+
+            // 压缩图片
+            function compressImage(file, maxSize = 800, quality = 0.7) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = new Image();
+                        img.onload = function() {
+                            const canvas = document.createElement('canvas');
+                            let w = img.width,
+                                h = img.height;
+                            if (w > maxSize || h > maxSize) {
+                                const ratio = Math.min(maxSize / w, maxSize / h);
+                                w = Math.round(w * ratio);
+                                h = Math.round(h * ratio);
+                            }
+                            canvas.width = w;
+                            canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, w, h);
+                            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                            resolve(dataUrl);
+                        };
+                        img.onerror = reject;
+                        img.src = e.target.result;
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            // ---------- 填充投入数（自动沿用） ----------
+            function autoFillInputCount(date) {
+                if (!date) date = inputDate.value;
+                if (!date) return;
+                const dayInput = getDayInput(date);
+                if (dayInput !== null) {
+                    inputCount.value = dayInput;
+                } else {
+                    // 如果没有记录，保留用户输入或清空
+                    if (!inputCount.value) inputCount.value = '';
+                }
+            }
+
+            // ---------- SN 前缀自动识别客户 ----------
+            function autoDetectCustomer(sn) {
+                const upper = sn.toUpperCase().trim();
+                if (upper.startsWith('YL')) {
+                    customerSelect.value = '联想';
+                    lineSelect.value = '联想B线';
+                    showToast('检测到联想 SN，已自动切换客户', 'info', 1000);
+                } else if (upper.startsWith('4CE')) {
+                    customerSelect.value = '惠普';
+                    lineSelect.value = '惠普A线';
+                    showToast('检测到惠普 SN，已自动切换客户', 'info', 1000);
+                }
+            }
+
+            // ---------- 渲染：今日统计 ----------
+            function renderTodayStats() {
+                const today = inputDate.value || getToday();
+                const dayRecords = records.filter(r => r.date === today);
+                const count = dayRecords.length;
+                const input = getDayInput(today) || 0;
+                todayCount.textContent = count;
+                todayInput.textContent = input;
+                const rate = input > 0 ? (count / input * 100) : 0;
+                todayRate.textContent = rate.toFixed(1) + '%';
+                todayRate.style.color = rate > 5 ? 'var(--danger)' : rate > 2 ? 'var(--warning)' : 'var(--success)';
+            }
+
+            // ---------- 渲染：记录列表 ----------
+            function renderRecords(filterDateVal) {
+                let filtered = [...records];
+                if (filterDateVal) {
+                    filtered = filtered.filter(r => r.date === filterDateVal);
+                }
+                const groups = {};
+                filtered.forEach(r => {
+                    const d = r.date || '未知日期';
+                    if (!groups[d]) groups[d] = [];
+                    groups[d].push(r);
+                });
+                const dates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+                if (dates.length === 0) {
+                    recordList.innerHTML = `
+                        <div class="card">
+                            <div class="empty-state">
+                                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                                <p>暂无记录</p>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                dates.forEach(date => {
+                    const items = groups[date];
+                    const dayInput = getDayInput(date) || 0;
+                    const rate = dayInput > 0 ? (items.length / dayInput * 100) : 0;
+                    html += `
+                        <div class="card" style="padding:12px 16px;">
+                            <div class="date-group-title">
+                                <span>📅 ${formatDate(date)}</span>
+                                <span class="count">${items.length} 条 ｜ 投入 ${dayInput} ｜ 不良率 ${rate.toFixed(1)}%</span>
+                            </div>
+                    `;
+                    items.forEach((r) => {
+                        const customer = r.customer || '未知';
+                        const line = r.line || '—';
+                        const sn = r.sn || '--';
+                        const defect = r.defect || '--';
+                        const time = r.createTime ? new Date(r.createTime).toLocaleTimeString('zh-CN', { hour: '2-digit',
+                            minute: '2-digit' }) : '';
+                        const hasImage = r.imageData && r.imageData.length > 100;
+                        html += `
+                            <div class="record-item">
+                                <div class="r-icon">${customer === '惠普' ? 'H' : 'L'}</div>
+                                <div class="r-body">
+                                    <div class="r-sn">${sn}</div>
+                                    <div class="r-defect">${defect}</div>
+                                    <div class="r-meta">
+                                        <span>${customer}</span>
+                                        <span class="tag">${line}</span>
+                                        ${time ? `<span>${time}</span>` : ''}
+                                    </div>
+                                </div>
+                                ${hasImage ? `<img class="r-thumb" src="${r.imageData}" alt="图片" data-image="${r.imageData}">` : ''}
+                                <button class="r-delete" data-id="${r.id}" aria-label="删除">✕</button>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                });
+                recordList.innerHTML = html;
+
+                // 删除事件
+                recordList.querySelectorAll('.r-delete').forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const id = this.dataset.id;
+                        if (confirm('确定要删除这条记录吗？')) {
+                            records = records.filter(r => r.id !== id);
+                            saveData();
+                            renderAll();
+                            showToast('已删除', 'success');
+                        }
+                    });
+                });
+
+                // 图片点击预览
+                recordList.querySelectorAll('.r-thumb').forEach(img => {
+                    img.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const src = this.dataset.image || this.src;
+                        if (src) {
+                            modalImage.src = src;
+                            imageModal.classList.add('show');
+                        }
+                    });
+                });
+
+                // 更新角标
+                const total = records.length;
+                if (total > 0) {
+                    recordBadge.style.display = 'flex';
+                    recordBadge.textContent = total > 99 ? '99+' : total;
+                } else {
+                    recordBadge.style.display = 'none';
+                }
+            }
+
+            // ---------- 渲染：统计 ----------
+            function renderStats() {
+                const total = records.length;
+                let totalInput = 0;
+                const dateSet = new Set();
+                records.forEach(r => {
+                    if (r.date) dateSet.add(r.date);
+                    const ic = Number(r.inputCount);
+                    if (!isNaN(ic) && ic > 0) totalInput += ic;
+                });
+                const dayInputMap = {};
+                records.forEach(r => {
+                    if (r.date && r.inputCount) {
+                        const ic = Number(r.inputCount);
+                        if (!isNaN(ic) && ic > 0) {
+                            if (!dayInputMap[r.date] || ic > dayInputMap[r.date]) {
+                                dayInputMap[r.date] = ic;
+                            }
+                        }
+                    }
+                });
+                const totalInputUnique = Object.values(dayInputMap).reduce((sum, v) => sum + v, 0);
+                const rate = totalInputUnique > 0 ? (total / totalInputUnique * 100) : 0;
+                const days = dateSet.size;
+
+                statTotal.textContent = total;
+                statTotalInput.textContent = totalInputUnique;
+                statRate.textContent = rate.toFixed(1) + '%';
+                statDays.textContent = days;
+
+                // 按客户
+                const customerMap = {};
+                records.forEach(r => {
+                    const c = r.customer || '未知';
+                    if (!customerMap[c]) customerMap[c] = 0;
+                    customerMap[c]++;
+                });
+                const custEntries = Object.entries(customerMap).sort((a, b) => b[1] - a[1]);
+                let custHtml = '';
+                if (custEntries.length === 0) {
+                    custHtml = '<div style="color:var(--gray-400);font-size:14px;text-align:center;padding:8px 0;">暂无数据</div>';
+                } else {
+                    const maxCust = custEntries[0]?.[1] || 1;
+                    custEntries.forEach(([name, count]) => {
+                        const pct = maxCust > 0 ? (count / maxCust * 100) : 0;
+                        custHtml += `
+                            <div class="stats-bar">
+                                <span class="bar-label">${name}</span>
+                                <div class="bar-track">
+                                    <div class="bar-fill" style="width:${Math.max(pct, 4)}%;background:var(--primary);"></div>
+                                </div>
+                                <span class="bar-count">${count}</span>
+                            </div>
+                        `;
+                    });
+                }
+                statsByCustomer.innerHTML = custHtml;
+
+                // 不良现象 TOP
+                const defectMap = {};
+                records.forEach(r => {
+                    const d = r.defect || '未知';
+                    if (!defectMap[d]) defectMap[d] = 0;
+                    defectMap[d]++;
+                });
+                const defectEntries = Object.entries(defectMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                let defectHtml = '';
+                if (defectEntries.length === 0) {
+                    defectHtml = '<div style="color:var(--gray-400);font-size:14px;text-align:center;padding:8px 0;">暂无数据</div>';
+                } else {
+                    const maxDefect = defectEntries[0]?.[1] || 1;
+                    const colors = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
+                        '#ec4899', '#14b8a6'
+                    ];
+                    defectEntries.forEach(([name, count], idx) => {
+                        const pct = maxDefect > 0 ? (count / maxDefect * 100) : 0;
+                        const color = colors[idx % colors.length];
+                        defectHtml += `
+                            <div class="stats-bar">
+                                <span class="bar-label" style="width:80px;">${name}</span>
+                                <div class="bar-track">
+                                    <div class="bar-fill" style="width:${Math.max(pct, 4)}%;background:${color};"></div>
+                                </div>
+                                <span class="bar-count">${count}</span>
+                            </div>
+                        `;
+                    });
+                }
+                statsByDefect.innerHTML = defectHtml;
+            }
+
+            // ---------- 渲染：不良现象历史标签 ----------
+            function renderDefectHistory() {
+                const history = getDefectHistory();
+                defectHistoryList.innerHTML = history.map(d => `<option value="${d}">`).join('');
+                const top8 = history.slice(0, 8);
+                defectQuickTags.innerHTML = top8.map(d =>
+                    `<span style="display:inline-block;padding:3px 12px;background:var(--gray-100);border-radius:12px;font-size:13px;color:var(--gray-600);cursor:pointer;transition:background 0.15s;" class="defect-tag">${d}</span>`
+                ).join('');
+                defectQuickTags.querySelectorAll('.defect-tag').forEach(el => {
+                    el.addEventListener('click', function() {
+                        inputDefect.value = this.textContent;
+                        inputDefect.focus();
+                    });
+                });
+            }
+
+            // ---------- 渲染全部 ----------
+            function renderAll() {
+                const filterVal = filterDate.value;
+                renderRecords(filterVal);
+                renderStats();
+                renderTodayStats();
+                renderDefectHistory();
+                // 自动填充投入数
+                autoFillInputCount(inputDate.value);
+                // 同步客户线别
+                customerSelect.dispatchEvent(new Event('change'));
+            }
+
+            // ---------- 提交记录 ----------
+            async function submitRecord() {
+                const date = inputDate.value;
+                if (!date) { showToast('请选择日期', 'error'); return; }
+                const count = inputCount.value;
+                if (!count || Number(count) <= 0) { showToast('请输入有效的投入数', 'error'); return; }
+                const sn = inputSn.value.trim();
+                if (!sn) { showToast('请输入或扫码获取 SN', 'error'); return; }
+                const defect = inputDefect.value.trim();
+                if (!defect) { showToast('请输入不良现象', 'error'); return; }
+
+                const customer = customerSelect.value;
+                const line = lineSelect.value;
+                let imageData = currentImageData || null;
+
+                const record = {
+                    id: generateId(),
+                    date: date,
+                    inputCount: Number(count),
+                    customer: customer,
+                    line: line,
+                    sn: sn,
+                    defect: defect,
+                    imageData: imageData,
+                    createTime: Date.now(),
+                    timestamp: Date.now()
+                };
+
+                records.push(record);
+                saveData();
+
+                // 清空输入（保留日期和投入数）
+                inputSn.value = '';
+                inputDefect.value = '';
+                clearImage();
+
+                showToast('✅ 记录已保存', 'success');
+                renderAll();
+                inputSn.focus();
+
+                setTimeout(() => {
+                    switchTab('records');
+                }, 400);
+            }
+
+            // ---------- 图片处理 ----------
+            function clearImage() {
+                currentImageData = null;
+                imagePreview.style.display = 'none';
+                imagePreview.src = '';
+                btnRemoveImage.style.display = 'none';
+                imageInput.value = '';
+            }
+
+            function handleImageFile(file) {
+                if (!file) return;
+                compressImage(file, 600, 0.7).then(dataUrl => {
+                    currentImageData = dataUrl;
+                    imagePreview.src = dataUrl;
+                    imagePreview.style.display = 'block';
+                    btnRemoveImage.style.display = 'inline-block';
+                    showToast('图片已添加', 'success');
+                }).catch(err => {
+                    showToast('图片处理失败', 'error');
+                    console.error(err);
+                });
+            }
+
+            // ---------- Tab 切换 ----------
+            function switchTab(tab) {
+                $$('.tab-item').forEach(el => {
+                    el.classList.toggle('active', el.dataset.tab === tab);
+                });
+                $$('.page').forEach(el => {
+                    el.classList.toggle('active', el.id === 'page' + tab.charAt(0).toUpperCase() + tab.slice(1));
+                });
+                if (tab === 'records') {
+                    renderRecords(filterDate.value);
+                } else if (tab === 'stats') {
+                    renderStats();
+                } else if (tab === 'entry') {
+                    renderTodayStats();
+                    renderDefectHistory();
+                    autoFillInputCount(inputDate.value);
+                } else if (tab === 'share') {
+                    // 预填当前网址
+                    if (!shareUrlInput.value) {
+                        shareUrlInput.value = window.location.href;
+                    }
+                }
+                const total = records.length;
+                if (total > 0) {
+                    recordBadge.style.display = 'flex';
+                    recordBadge.textContent = total > 99 ? '99+' : total;
+                } else {
+                    recordBadge.style.display = 'none';
+                }
+            }
+
+            // ---------- 扫码功能 ----------
+            async function startScanner() {
+                if (isScanning) return;
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const hasCamera = devices.some(d => d.kind === 'videoinput');
+                    if (!hasCamera) {
+                        showToast('未检测到摄像头，请手动输入 SN', 'error');
+                        return;
+                    }
+                } catch (e) {
+                    showToast('无法访问摄像头，请手动输入', 'error');
+                    return;
+                }
+
+                scannerOverlay.classList.add('show');
+                scannerBox.innerHTML = '';
+
+                try {
+                    const html5QrCode = new Html5Qrcode('scannerBox');
+                    scannerInstance = html5QrCode;
+                    isScanning = true;
+                    const config = { fps: 15, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+                    await html5QrCode.start({ facingMode: 'environment' }, config, onScanSuccess, onScanError);
+                } catch (err) {
+                    console.warn('扫码启动失败:', err);
+                    scannerOverlay.classList.remove('show');
+                    isScanning = false;
+                    showToast('扫码启动失败，请手动输入', 'error');
+                }
+            }
+
+            function onScanSuccess(decodedText) {
+                inputSn.value = decodedText.trim();
+                showToast('✅ 扫码成功: ' + decodedText, 'success', 1200);
+                stopScanner();
+                // 自动识别客户
+                autoDetectCustomer(decodedText);
+                setTimeout(() => inputDefect.focus(), 300);
+            }
+
+            function onScanError(err) {}
+
+            function stopScanner() {
+                if (scannerInstance) {
+                    try {
+                        scannerInstance.stop().then(() => {
+                            scannerInstance.clear();
+                            scannerInstance = null;
+                        }).catch(() => {});
+                    } catch (e) {}
+                }
+                scannerOverlay.classList.remove('show');
+                isScanning = false;
+            }
+
+            // ---------- 导出 Excel（通用） ----------
+            function exportExcelData(data, filename) {
+                if (!data || data.length === 0) {
+                    showToast('没有数据可导出', 'error');
+                    return;
+                }
+                const wsData = data.map(r => ({
+                    '日期': r.date || '',
+                    '投入数': r.inputCount || '',
+                    '客户': r.customer || '',
+                    '线别': r.line || '',
+                    'SN': r.sn || '',
+                    '不良现象': r.defect || '',
+                    '记录时间': r.createTime ? new Date(r.createTime).toLocaleString('zh-CN') : ''
+                }));
+                const ws = XLSX.utils.json_to_sheet(wsData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, '不良记录');
+                XLSX.writeFile(wb, filename || `不良记录_${getToday()}.xlsx`);
+                showToast('📤 Excel 导出成功', 'success');
+            }
+
+            // ---------- 二维码海报生成 ----------
+            function generatePoster() {
+                const url = shareUrlInput.value.trim();
+                if (!url) {
+                    showToast('请输入有效的网址', 'error');
+                    return;
+                }
+                // 验证url格式
+                try {
+                    new URL(url);
+                } catch (e) {
+                    showToast('请输入完整的网址（包含 http:// 或 https://）', 'error');
+                    return;
+                }
+                // 清空之前的二维码
+                qrcodeContainer.innerHTML = '';
+                // 生成二维码
+                try {
+                    new QRCode(qrcodeContainer, {
+                        text: url,
+                        width: 180,
+                        height: 180,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    posterArea.style.display = 'block';
+                    const now = new Date().toLocaleString('zh-CN');
+                    posterFooter.textContent = '生成日期: ' + now;
+                    showToast('✅ 海报生成成功，可截图分享', 'success');
+                    // 滚动到海报位置
+                    posterArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } catch (err) {
+                    showToast('二维码生成失败: ' + err.message, 'error');
+                }
+            }
+
+            // ---------- 事件绑定 ----------
+            // 日期默认今天
+            inputDate.value = getToday();
+
+            // 日期变化时自动填充投入数
+            inputDate.addEventListener('change', function() {
+                autoFillInputCount(this.value);
+                renderTodayStats();
+            });
+
+            // 客户与线别联动
+            customerSelect.addEventListener('change', function() {
+                const val = this.value;
+                if (val === '惠普') {
+                    lineSelect.value = '惠普A线';
+                } else {
+                    lineSelect.value = '联想B线';
+                }
+            });
+            customerSelect.dispatchEvent(new Event('change'));
+
+            // SN 输入时自动检测客户
+            inputSn.addEventListener('input', function() {
+                const val = this.value.trim();
+                if (val.length >= 2) {
+                    autoDetectCustomer(val);
+                }
+            });
+
+            // 提交
+            btnSubmit.addEventListener('click', submitRecord);
+
+            // 回车提交
+            inputSn.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    inputDefect.focus();
+                }
+            });
+            inputDefect.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    submitRecord();
+                }
+            });
+
+            // 扫码
+            btnScan.addEventListener('click', startScanner);
+            btnCloseScanner.addEventListener('click', stopScanner);
+            scannerOverlay.addEventListener('click', function(e) {
+                if (e.target === this) stopScanner();
+            });
+
+            // 历史快速选择
+            btnQuickDefect.addEventListener('click', function() {
+                const history = getDefectHistory();
+                if (history.length === 0) {
+                    showToast('暂无历史记录', 'info');
+                    return;
+                }
+                const choice = prompt('选择不良现象 (输入编号):\n' + history.map((d, i) => `${i+1}. ${d}`).join('\n'));
+                if (choice !== null) {
+                    const idx = parseInt(choice) - 1;
+                    if (!isNaN(idx) && idx >= 0 && idx < history.length) {
+                        inputDefect.value = history[idx];
+                        inputDefect.focus();
+                    } else {
+                        showToast('无效选择', 'error');
+                    }
+                }
+            });
+
+            // 图片上传
+            btnUploadImage.addEventListener('click', function() {
+                imageInput.click();
+            });
+            imageInput.addEventListener('change', function() {
+                if (this.files && this.files.length > 0) {
+                    handleImageFile(this.files[0]);
+                }
+                this.value = '';
+            });
+            btnRemoveImage.addEventListener('click', function() {
+                clearImage();
+                showToast('已移除图片', 'info');
+            });
+
+            // Tab 切换
+            $$('.tab-item').forEach(el => {
+                el.addEventListener('click', function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
+
+            // 筛选日期
+            filterDate.addEventListener('change', function() {
+                renderRecords(this.value);
+            });
+            btnClearFilter.addEventListener('click', function() {
+                filterDate.value = '';
+                renderRecords('');
+            });
+
+            // 导出 Excel（统计页全部）
+            btnExportExcel.addEventListener('click', function() {
+                if (records.length === 0) { showToast('没有数据可导出', 'error'); return; }
+                exportExcelData(records);
+            });
+
+            // 导出 Excel（记录页筛选后）
+            btnExportRecordsExcel.addEventListener('click', function() {
+                const filterVal = filterDate.value;
+                let data = [...records];
+                if (filterVal) {
+                    data = data.filter(r => r.date === filterVal);
+                }
+                if (data.length === 0) { showToast('当前筛选无数据', 'error'); return; }
+                const filename = filterVal ? `不良记录_${filterVal}.xlsx` : `不良记录_${getToday()}.xlsx`;
+                exportExcelData(data, filename);
+            });
+
+            // 生成海报
+            btnGeneratePoster.addEventListener('click', generatePoster);
+
+            // 预填当前网址
+            if (window.location.href) {
+                shareUrlInput.value = window.location.href;
+            }
+
+            // ---------- 初始化 ----------
+            loadData();
+            renderAll();
+
+            // 监听存储变化
+            window.addEventListener('storage', function(e) {
+                if (e.key === STORAGE_KEY) {
+                    loadData();
+                    renderAll();
+                }
+            });
+
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                    loadData();
+                    renderAll();
+                }
+            });
+
+            window.addEventListener('beforeunload', function() {
+                stopScanner();
+            });
+
+            // 粘贴功能
+            inputSn.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    navigator.clipboard.readText().then(text => {
+                        if (text && text.trim()) {
+                            this.value = text.trim();
+                            showToast('已粘贴: ' + this.value, 'success', 1000);
+                            autoDetectCustomer(this.value);
+                        }
+                    }).catch(() => {});
+                }
+            });
+
+            // 图片模态框关闭
+            window.closeImageModal = function(e) {
+                if (e && e.target !== e.currentTarget) return;
+                imageModal.classList.remove('show');
+                modalImage.src = '';
+            };
+
+            console.log('📱 不良记录管理 App v3 已启动 (支持投入数沿用、SN自动识别、二维码海报)');
+            console.log('📊 当前记录数:', records.length);
+
+            window.__app = { records, exportExcel: () => exportExcelData(records), generatePoster };
+
+        })();
+    </script>
+
+</body>
+</html>
